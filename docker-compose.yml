@@ -1,0 +1,55 @@
+services:
+  # PostgreSQL база данных
+  postgres:
+    image: postgres:15-alpine
+    container_name: video_analytics_db
+    environment:
+      POSTGRES_DB: video_analytics
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_HOST_AUTH_METHOD: trust
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    ports:
+      - "5433:5432" # Изменили внешний порт на 5433
+    networks:
+      - bot_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Telegram бот
+  bot:
+    build: .
+    container_name: video_analytics_bot
+    environment:
+      # Telegram
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+
+      # OpenAI
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+
+      # Database
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: video_analytics
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+    volumes:
+      - ./data.json:/app/data.json
+      - ./logs:/app/logs
+    depends_on:
+      - postgres
+    networks:
+      - bot_network
+    restart: unless-stopped
+
+networks:
+  bot_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
