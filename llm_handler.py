@@ -56,13 +56,18 @@ SYSTEM_PROMPT = """Ты SQL-генератор для PostgreSQL базы дан
 4. **Для вопросов о приростах и динамике** используй таблицу `video_snapshots`:
    - "На сколько просмотров выросли все видео 28 ноября?" → SELECT COALESCE(SUM(delta_views_count), 0) FROM video_snapshots WHERE DATE(created_at) = '2025-11-28'
    - "Сколько видео получали новые просмотры 27 ноября?" → SELECT COUNT(DISTINCT video_id) FROM video_snapshots WHERE DATE(created_at) = '2025-11-27' AND delta_views_count > 0
+   - "Прирост просмотров у креатора X за 28 ноября" → SELECT COALESCE(SUM(vs.delta_views_count), 0) FROM video_snapshots vs JOIN videos v ON vs.video_id = v.id WHERE v.creator_id = 'X' AND DATE(vs.created_at) = '2025-11-28'
+   - "Прирост с 10:00 до 15:00 28 ноября" → SELECT COALESCE(SUM(delta_views_count), 0) FROM video_snapshots WHERE created_at >= '2025-11-28 10:00:00' AND created_at < '2025-11-28 15:00:00'
 
 5. **ВАЖНО**:
    - Всегда используй COALESCE(..., 0) чтобы NULL превращался в 0
    - Для дат используй DATE() функцию для сравнения только даты без времени
    - Для диапазонов дат используй BETWEEN с включением конечной даты (добавь 23:59:59)
-   - Даты пиши в формате 'YYYY-MM-DD'
+   - Для временных диапазонов (часы) используй created_at >= 'YYYY-MM-DD HH:00:00' AND created_at < 'YYYY-MM-DD HH:00:00'
+   - Для соединения с креаторами используй JOIN: FROM video_snapshots vs JOIN videos v ON vs.video_id = v.id WHERE v.creator_id = '...'
+   - Даты пиши в формате 'YYYY-MM-DD', время в формате 'YYYY-MM-DD HH:MM:SS'
    - Месяцы на русском: январь=01, февраль=02, март=03, апрель=04, май=05, июнь=06, июль=07, август=08, сентябрь=09, октябрь=10, ноябрь=11, декабрь=12
+   - При указании временного промежутка "с X до Y" используй >= X AND < Y (не включая Y)
 
 6. **Формат ответа**:
    - Верни ТОЛЬКО SQL запрос, без объяснений
@@ -83,6 +88,9 @@ SYSTEM_PROMPT = """Ты SQL-генератор для PostgreSQL базы дан
 
 Вопрос: "Сколько видео получали просмотры 27 ноября 2025?"
 Ответ: SELECT COUNT(DISTINCT video_id) FROM video_snapshots WHERE DATE(created_at) = '2025-11-27' AND delta_views_count > 0
+
+Вопрос: "На сколько просмотров выросли видео креатора X с 10:00 до 15:00 28 ноября 2025?"
+Ответ: SELECT COALESCE(SUM(vs.delta_views_count), 0) FROM video_snapshots vs JOIN videos v ON vs.video_id = v.id WHERE v.creator_id = 'X' AND vs.created_at >= '2025-11-28 10:00:00' AND vs.created_at < '2025-11-28 15:00:00'
 """
 
 
@@ -98,7 +106,7 @@ async def process_natural_language_query(question: str) -> int:
     """
     import sys
 
-    print(f"\nВопрос: {question}", flush=True)
+    print(f"\n📝 Вопрос: {question}", flush=True)
     sys.stdout.flush()
 
     # Генерируем SQL через GPT
@@ -128,7 +136,7 @@ async def process_natural_language_query(question: str) -> int:
     # Выполняем запрос
     try:
         result = execute_query(sql_query)
-        print(f"Результат: {result}", flush=True)
+        print(f"✅ Результат: {result}", flush=True)
         sys.stdout.flush()
         return result
     except Exception as e:
