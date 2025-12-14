@@ -10,7 +10,10 @@ from llm_handler import process_natural_language_query
 load_dotenv()
 
 # Инициализация бота
-bot = Bot(token=os.getenv("TELEGRAM_BOT_TOKEN"))
+bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
+if not bot_token:
+    raise ValueError("TELEGRAM_BOT_TOKEN не найден в переменных окружения")
+bot = Bot(token=bot_token)
 dp = Dispatcher()
 
 
@@ -57,28 +60,22 @@ async def cmd_help(message: types.Message):
 @dp.message()
 async def handle_question(message: types.Message):
     """Обработка вопросов пользователя"""
-    user_question = message.text
+    user_question = message.text or ""
+    username = message.from_user.username if message.from_user else "unknown"
     print(
-        f"\n📩 Получен вопрос от @{message.from_user.username}: {user_question}",
+        f"\n📩 Получен вопрос от @{username}: {user_question}",
         flush=True,
     )
-
-    # Показываем что обрабатываем
-    processing_msg = await message.answer("🔄 Обрабатываю запрос...")
 
     try:
         # Обрабатываем вопрос через LLM
         result = await process_natural_language_query(user_question)
-
-        # Удаляем сообщение о обработке
-        await processing_msg.delete()
 
         # Отправляем результат
         await message.answer(str(result))
         print(f"Ответ отправлен: {result}", flush=True)
 
     except Exception as e:
-        await processing_msg.delete()
         error_msg = f"Ошибка: {str(e)}"
         print(error_msg, flush=True)
         await message.answer(
